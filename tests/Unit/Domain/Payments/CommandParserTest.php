@@ -35,6 +35,6 @@ class CommandParserTest extends TestCase
 
         // `#` is not stripped as a comment here; first token is unknown (not a command name).
         $this->assertNull($result->commandValue());
-        $this->assertSame('Unknown command: #', $result->errorValue());
+        $this->assertSame('Malformed command line (invalid comment position)', $result->errorValue());
     }
 }

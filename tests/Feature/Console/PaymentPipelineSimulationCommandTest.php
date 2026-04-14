@@ -77,9 +77,9 @@ class PaymentPipelineSimulationCommandTest extends TestCase
         ]);
 
         $out = $this->joinedOutput($lines);
-        $this->assertStringContainsString('ERROR REFUND not allowed from INITIATED', $out);
-        $this->assertStringContainsString('ERROR CAPTURE not allowed from INITIATED', $out);
-        $this->assertStringContainsString('ERROR VOID not allowed from CAPTURED', $out);
+        $this->assertStringContainsString('ERROR REFUND not allowed: cannot process payment in "INITIATED" state', $out);
+        $this->assertStringContainsString('ERROR CAPTURE not allowed: cannot process payment in "INITIATED" state', $out);
+        $this->assertStringContainsString('ERROR VOID not allowed: cannot process payment in "CAPTURED" state', $out);
         $this->assertStringContainsString('P1004', $out);
         $this->assertStringContainsString('CAPTURED', $out);
         $this->assertStringContainsString('30.00', $out);
@@ -114,7 +114,7 @@ class PaymentPipelineSimulationCommandTest extends TestCase
         ]);
 
         $out = $this->joinedOutput($lines);
-        $this->assertStringContainsString('ERROR Unknown command: #', $out);
+        $this->assertStringContainsString('ERROR Malformed command line (invalid comment position)', $out);
         $this->assertStringContainsString('OK CREATE P1006 INITIATED', $out);
         $this->assertStringContainsString('OK AUTHORIZE P1006 AUTHORIZED', $out);
         $this->assertStringContainsString('AUTHORIZED', $out);
@@ -130,7 +130,7 @@ class PaymentPipelineSimulationCommandTest extends TestCase
         ]);
 
         $out = $this->joinedOutput($lines);
-        $this->assertStringContainsString('ERROR CREATE conflict for P1007; existing payment marked FAILED', $out);
+        $this->assertStringContainsString('ERROR CREATE conflict for Payment ID: P1007. Existing payment marked FAILED', $out);
         $this->assertStringContainsString('FAILED', $out);
         $this->assertStringContainsString('CREATE_CONFLICT', $out);
         $this->assertStringContainsString('50.00', $out);
