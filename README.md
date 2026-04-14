@@ -1,90 +1,132 @@
-# MSPay - Payment Pipeline Simulation – Coding Exercise
+# MSPay – Payment Pipeline Simulation (Coding Exercise)
 
-Payment pipeline simulation: a Laravel-based CLI that processes payment lifecycle commands from **stdin** or a **text file**, with configurable currencies, pre-settlement review thresholds, and database or in-memory persistence.
+A Laravel-based CLI application that simulates a payment processing pipeline. It supports **stdin or file-based command execution**, configurable currencies, pre-settlement review rules, and pluggable persistence (database or in-memory).
 
-The full problem statement, semantics, and evaluation criteria are in `[payment_pipeline_simulation_test.md](payment_pipeline_simulation_test.md)`. This README focuses on **how to install, run, configure, and test** the solution, plus a short note on design and assumptions.
+The full specification and evaluation rules are defined in:
+📄 `[payment_pipeline_simulation_test.md](payment_pipeline_simulation_test.md)`
 
-## Requirements (summary)
+This document focuses on **installation, usage, configuration, testing, and design notes**.
 
-The application implements the exercise described in `payment_pipeline_simulation_test.md`, including:
+---
 
-- Payment states: `INITIATED`, `AUTHORIZED`, `PRE_SETTLEMENT_REVIEW`, `CAPTURED`, `SETTLED`, `VOIDED`, `REFUNDED`, `FAILED`
-- Commands: `CREATE`, `AUTHORIZE`, `CAPTURE`, `VOID`, `REFUND`, `SETTLE`, `SETTLEMENT`, `STATUS`, `LIST`, `AUDIT`, `EXIT`
-- Input from **stdin** (interactive) or an **optional file path** argument; processing continues after errors (no raw stack traces to the user)
-- Idempotent `CREATE` (same attributes) and idempotent `SETTLE` on already-settled payments
-- `SETTLEMENT` as batch/reporting only (no per-payment state change)
-- `AUDIT` acknowledged without mutating payment state
-- Inline `#` comments only when `#` appears **after the third token** on the line (see parser tests)
+## 📌 Requirements (Summary)
 
-## Prerequisites
+This application implements the payment lifecycle described in the specification:
 
-- **PHP** 8.3+
-- **Composer** 2.x
-- **Database** supported by Laravel (e.g. MySQL/MariaDB, or SQLite for local dev) when using the default `database` storage driver
+### 🔄 Payment States
+- `INITIATED`
+- `AUTHORIZED`
+- `PRE_SETTLEMENT_REVIEW`
+- `CAPTURED`
+- `SETTLED`
+- `VOIDED`
+- `REFUNDED`
+- `FAILED`
 
-## Installation
+### 🧾 Supported Commands
+- `CREATE`
+- `AUTHORIZE`
+- `CAPTURE`
+- `VOID`
+- `REFUND`
+- `SETTLE`
+- `SETTLEMENT`
+- `STATUS`
+- `LIST`
+- `AUDIT`
+- `EXIT`
 
-### 1. Clone the repository
+### ⚙️ Core Behaviors
+- Input via **stdin (interactive)** or **file argument**
+- Processing continues even after invalid commands (no stack traces shown)
+- **Idempotent CREATE** (same attributes)
+- **Idempotent SETTLE**
+- `SETTLEMENT` is **report-only (no state changes)**
+- `AUDIT` is non-mutating
+- Inline comments supported only when `#` appears **after the 3rd token**
 
+---
+
+## 🧰 Prerequisites
+
+- 🐘 PHP **8.3+**
+- 📦 Composer **2.x**
+- 🗄️ Database (MySQL / MariaDB / SQLite) if using `database` storage driver
+
+---
+
+## 🚀 Installation
+
+### 1️⃣ Clone Repository
 ```bash
 git clone git@github.com:paratanker/mspay.git mspay
 cd mspay
 ```
 
-### 2. Install PHP dependencies
-
+### 2️⃣ Install Dependencies
 ```bash
 composer install
 ```
 
-### 3. Environment
-
-Copy the example environment file and generate an application key:
-
+### 3️⃣ Environment Setup
 ```bash
-copy .env.example .env
+cp .env.example .env
 php artisan key:generate
 ```
 
-On Unix-like shells, use `cp .env.example .env` instead of `copy`.
+### 4️⃣ Configure Database (if using DB storage)
+Update `.env`:
+```env
+DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_DATABASE=mspay
+DB_USERNAME=root
+DB_PASSWORD=
+```
 
-### 4. Database (for default pipeline storage)
-
-The payment simulation can persist to the database (`payment_pipeline_payments`, `payment_settlement_batches`). Configure your connection in `.env` (see `.env.example` for `DB_*` variables), then run migrations:
-
+Run migrations:
 ```bash
 php artisan migrate
 ```
 
-For a quick SQLite setup you can set `DB_CONNECTION=sqlite` and point `DB_DATABASE` to an absolute path of a database file (Laravel will create it if missing when configured).
+💡 For SQLite:
+```env
+DB_CONNECTION=sqlite
+DB_DATABASE=/absolute/path/database.sqlite
+```
 
-### 5. Optional: one-shot setup script
+---
 
-The project includes a Composer `setup` script that installs dependencies, ensures `.env`, runs `key:generate`, migrates, and runs frontend tooling. If you only need the payment CLI, steps 2–4 are enough.
-
+### 5️⃣ Optional Setup Script
 ```bash
 composer run setup
 ```
 
-## Running the payment pipeline simulation
+---
 
-The entry point is an Artisan command:
+## ▶️ Running the Simulation
 
+### 🖥️ Interactive Mode (stdin)
 ```bash
 php artisan payments:simulate
 ```
 
-- **Interactive (stdin):** run the command with no arguments, then type commands line by line. End input with EOF (e.g. Ctrl+Z then Enter on Windows, or Ctrl+D on Unix) or send `EXIT` to stop cleanly.
+Exit using:
+- `EXIT`
+- or EOF (Ctrl+D / Ctrl+Z)
 
-**Example (file input):**
+---
 
+### 📄 File Input Mode
 ```bash
 php artisan payments:simulate resources\simulation\command.txt
 ```
 
-Each line is one command. See `payment_pipeline_simulation_test.md` for exact syntax and semantics.
+Each line represents a command (see spec for syntax).
 
-## Configuration (no code edits required)
+---
+
+## ⚙️ Configuration
 
 Pipeline-related settings are driven by **environment variables** (see `.env.example` and `config/payment_pipeline.php`):
 
@@ -94,43 +136,77 @@ Pipeline-related settings are driven by **environment variables** (see `.env.exa
 | `PAYMENT_PIPELINE_SUPPORTED_CURRENCIES` | JSON array of 3-letter codes, e.g. `["MYR","USD"]`. Empty or invalid values fall back to built-in defaults.                                        |
 | `PAYMENT_PIPELINE_REVIEW_THRESHOLD`     | JSON object of **minor-unit** thresholds per currency, e.g. `{"MYR":1000000,"USD":1000000}`. Used to decide **pre-settlement review** (see below). |
 | `PAYMENT_PIPELINE_STORAGE_DRIVER`       | `database` (default) or `in_memory` (no DB needed for the simulation run).                                                                         |
-| `PAYMENT_PIPELINE_LOG_LEVEL`            | Defined in `config/payment_pipeline.php` (default `info`); optional hook if you wire pipeline-specific logging.                                    |
+| `PAYMENT_PIPELINE_LOG_LEVEL`            | Defined in `config/payment_pipeline.php` (default `info`); optional hook if you wire pipeline-specific logging.
 
+---
 
-### Amounts: why minor units (integers) internally
+## 💰 Amount Handling (Minor Units)
 
 The exercise requires a **positive decimal amount** with **fixed precision** and explicitly says to **avoid floating-point errors**. Commands still accept human-readable decimals (for example `10.00`), but the domain stores and compares amounts as **integers in the smallest currency unit** (minor units: cents, sen, and so on). That keeps arithmetic exact, makes `CREATE` idempotency and refund limits reliable, and is why review **thresholds** in configuration are expressed in **minor units**. Output continues to format amounts as decimals using each currency’s decimal places.
 
-### `PRE_SETTLEMENT_REVIEW` (assumption)
+- Input: decimals (e.g. 10.00)
+- Storage: integer minor units
+- Thresholds: minor units
+- Output: formatted decimals
+
+---
+
+## 🧪 PRE_SETTLEMENT_REVIEW (assumption)
 
 After `AUTHORIZE`, a payment may enter `PRE_SETTLEMENT_REVIEW` instead of `AUTHORIZED` when its amount in **minor units** is **greater than or equal to** the configured threshold for that currency. Thresholds come from defaults merged with `PAYMENT_PIPELINE_REVIEW_THRESHOLD`. If thresholds are unset or not applicable, authorization goes straight to `AUTHORIZED`. This matches the exercise’s expectation to document a reasonable, configurable rule.
 
-### Partial refunds
+If:
+amount >= threshold → PRE_SETTLEMENT_REVIEW  
+else → AUTHORIZED
+
+---
+
+## 💸 Partial Refunds
 
 Optional `REFUND <payment_id> <amount>` is supported: amounts are validated for currency precision and must not exceed the original capture amount. Behavior is documented here for reviewers; the domain still uses a single refunded state as allowed by the spec.
 
-### `SETTLE` vs `SETTLEMENT`
+- `REFUND <payment_id> <amount>`
+- Must not exceed captured amount
+- Simplified refund state model
+
+---
+
+## 🔁 SETTLE vs SETTLEMENT
+
+### SETTLE
 
 - `**SETTLE <payment_id>`** moves a single payment `CAPTURED → SETTLED` (idempotent if already `SETTLED`).
+
+- CAPTURED → SETTLED
+- Idempotent
+
+### SETTLEMENT
+
 - `**SETTLEMENT <batch_id>`** records a batch acknowledgement and may summarize settled payments; it does **not** change individual payment states.
 
-## Testing
+- Batch/report only
+- No state changes
 
-Run the automated test suite (includes payment pipeline feature tests):
+---
+
+## 🧪 Testing
 
 ```bash
 php artisan test
 ```
 
-Or:
+or
 
 ```bash
 composer test
 ```
 
+
 The exercise asks for coverage of happy paths, invalid transitions, idempotency, and parser edge cases; see `tests/` (e.g. `tests/Feature/Console/PaymentPipelineSimulationCommandTest.php`).
 
-## Architecture (brief)
+---
+
+## 🏗️ Architecture Overview
 
 - **Parsing** (`App\Domain\Payments\Parsing`): command lines and inline-comment rules separated from business logic.
 - **Domain** (`App\Domain\Payments\Model`, `PaymentStateMachine`): state transitions and invariants.
@@ -139,7 +215,9 @@ The exercise asks for coverage of happy paths, invalid transitions, idempotency,
 
 This separation is intended to make new commands or states easier to add without entangling I/O and rules.
 
-## Production vs This Exercise
+---
+
+## 🏭 Production Improvements
 
 This implementation is intentionally simplified and CLI-driven to match the exercise scope. In a production-grade payment system, I would enhance it in the following areas:
 
@@ -203,4 +281,3 @@ This implementation is intentionally simplified and CLI-driven to match the exer
   - `PaymentRefunded`
 - Use a queue system for async processing (e.g. notifications, external integrations)
 - Improve scalability, resilience, and fault isolation
-
