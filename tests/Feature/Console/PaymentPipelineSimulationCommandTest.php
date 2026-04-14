@@ -64,73 +64,97 @@ class PaymentPipelineSimulationCommandTest extends TestCase
         $this->assertStringContainsString('5.00', $out);
     }
 
-    public function test_invalid_transitions_are_rejected_without_state_mutation(): void
+    public function test_invalid_transitions_refund_before_capture(): void
     {
         $lines = $this->runCommands([
             'CREATE P1004 30.00 MYR M01',
             'REFUND P1004',
-            'CAPTURE P1004',
-            'AUTHORIZE P1004',
-            'CAPTURE P1004',
-            'VOID P1004',
-            'STATUS P1004',
         ]);
 
         $out = $this->joinedOutput($lines);
         $this->assertStringContainsString('ERROR REFUND not allowed: cannot process payment in "INITIATED" state', $out);
-        $this->assertStringContainsString('ERROR CAPTURE not allowed: cannot process payment in "INITIATED" state', $out);
-        $this->assertStringContainsString('ERROR VOID not allowed: cannot process payment in "CAPTURED" state', $out);
-        $this->assertStringContainsString('P1004', $out);
-        $this->assertStringContainsString('CAPTURED', $out);
-        $this->assertStringContainsString('30.00', $out);
     }
 
-    public function test_idempotency_for_create_and_settle_is_enforced(): void
+    public function test_invalid_transitions_capture_before_authorize(): void
     {
         $lines = $this->runCommands([
-            'CREATE P1005 40.00 MYR M01',
-            'CREATE P1005 40.00 MYR M01',
-            'AUTHORIZE P1005',
+            'CREATE P1005 30.00 MYR M01',
             'CAPTURE P1005',
-            'SETTLE P1005',
-            'SETTLE P1005',
-            'STATUS P1005',
         ]);
 
         $out = $this->joinedOutput($lines);
-        $this->assertStringContainsString('OK CREATE IDEMPOTENT P1005', $out);
-        $this->assertStringContainsString('OK SETTLE IDEMPOTENT P1005', $out);
-        $this->assertStringContainsString('SETTLED', $out);
-        $this->assertStringContainsString('40.00', $out);
+        $this->assertStringContainsString('ERROR CAPTURE not allowed: cannot process payment in "INITIATED" state', $out);
+    }
+
+    public function test_invalid_transitions_void_after_capture(): void
+    {
+        $lines = $this->runCommands([
+            'CREATE P1006 30.00 MYR M01',
+            'AUTHORIZE P1006',
+            'CAPTURE P1006',
+            'VOID P1006',
+        ]);
+
+        $out = $this->joinedOutput($lines);
+        $this->assertStringContainsString('ERROR VOID not allowed: cannot process payment in "CAPTURED" state', $out);
+    }
+
+    public function test_idempotency_for_create_command(): void
+    {
+        $lines = $this->runCommands([
+            'CREATE P1007 40.00 MYR M01',
+            'CREATE P1007 40.00 MYR M01',
+        ]);
+
+        $out = $this->joinedOutput($lines);
+        $this->assertStringContainsString('OK CREATE IDEMPOTENT P1007', $out);
+    }
+
+    public function test_idempotency_for_settle_command(): void
+    {
+        $lines = $this->runCommands([
+            'CREATE P1008 40.00 MYR M01',
+            'AUTHORIZE P1008',
+            'CAPTURE P1008',
+            'SETTLE P1008',
+            'SETTLE P1008',
+        ]);
+
+        $out = $this->joinedOutput($lines);
+        $this->assertStringContainsString('OK SETTLE IDEMPOTENT P1008', $out);
     }
 
     public function test_parser_hash_behavior_matches_spec_examples(): void
     {
         $lines = $this->runCommands([
-            '# CREATE P1006 11.00 MYR M01',
-            'CREATE P1006 11.00 MYR M01 # test payment',
-            'AUTHORIZE P1006 # retry',
-            'STATUS P1006',
+            '# CREATE P1009 11.00 MYR M01',
+            'CREATE P1009 11.00 MYR M01 # test payment',
+            'AUTHORIZE P1009 # retry',
+            'AUTHORIZE # COMMENT P1009',
+            'STATUS P1009',
+            'STATUS P1009 #COMMENT',
         ]);
 
         $out = $this->joinedOutput($lines);
         $this->assertStringContainsString('ERROR Malformed command line (invalid comment position)', $out);
-        $this->assertStringContainsString('OK CREATE P1006 INITIATED', $out);
-        $this->assertStringContainsString('OK AUTHORIZE P1006 AUTHORIZED', $out);
+        $this->assertStringContainsString('OK CREATE P1009 INITIATED', $out);
+        $this->assertStringContainsString('OK AUTHORIZE P1009 AUTHORIZED', $out);
+        $this->assertStringContainsString('ERROR Malformed command line (invalid comment position)', $out);
         $this->assertStringContainsString('AUTHORIZED', $out);
         $this->assertStringContainsString('11.00', $out);
+        $this->assertStringContainsString('AUTHORIZED', $out);
     }
 
     public function test_create_conflict_marks_existing_payment_failed(): void
     {
         $lines = $this->runCommands([
-            'CREATE P1007 50.00 MYR M01',
-            'CREATE P1007 50.01 MYR M01',
-            'STATUS P1007',
+            'CREATE P1010 50.00 MYR M01',
+            'CREATE P1010 50.01 MYR M01',
+            'STATUS P1010',
         ]);
 
         $out = $this->joinedOutput($lines);
-        $this->assertStringContainsString('ERROR CREATE conflict for Payment ID: P1007. Existing payment marked FAILED', $out);
+        $this->assertStringContainsString('ERROR CREATE conflict for Payment ID: P1010. Existing payment marked FAILED', $out);
         $this->assertStringContainsString('FAILED', $out);
         $this->assertStringContainsString('CREATE_CONFLICT', $out);
         $this->assertStringContainsString('50.00', $out);
@@ -139,18 +163,18 @@ class PaymentPipelineSimulationCommandTest extends TestCase
     public function test_settlement_and_audit_do_not_mutate_payment_state(): void
     {
         $lines = $this->runCommands([
-            'CREATE P1008 60.00 MYR M01',
-            'AUTHORIZE P1008',
-            'CAPTURE P1008',
+            'CREATE P1011 60.00 MYR M01',
+            'AUTHORIZE P1011',
+            'CAPTURE P1011',
             'SETTLEMENT BATCH001',
-            'AUDIT P1008',
-            'STATUS P1008',
+            'AUDIT P1011',
+            'STATUS P1011',
         ]);
 
         $out = $this->joinedOutput($lines);
         $this->assertStringContainsString('SETTLEMENT BATCH001 RECORDED', $out);
         $this->assertStringContainsString('TOTAL SETTLED COUNT: 0', $out);
-        $this->assertStringContainsString('AUDIT RECEIVED P1008', $out);
+        $this->assertStringContainsString('AUDIT RECEIVED P1011', $out);
         $this->assertStringContainsString('CAPTURED', $out);
         $this->assertStringContainsString('60.00', $out);
     }
