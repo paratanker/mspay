@@ -146,7 +146,7 @@ final class PaymentPipelineEngine
             $this->paymentRepository->save($existing);
 
             return new EngineOutput([$this->error(sprintf(
-                'CREATE conflict for %s; existing payment marked FAILED',
+                'CREATE conflict for Payment ID: %s. Existing payment marked FAILED',
                 $paymentId
             ))]);
         }
@@ -418,12 +418,13 @@ final class PaymentPipelineEngine
             return new EngineOutput([$this->error('AUDIT expects 1 argument. Command format: AUDIT <payment_id>')]);
         }
 
+        /*// Uncomment this to log audit payment id exists
         $exist = $this->paymentRepository->exists($command->arguments()[0]);
 
         FacadesLog::info('AUDIT command received', [
             'payment_id' => $command->arguments()[0],
             'exists' => $exist,
-        ]);
+        ]);*/
 
         return new EngineOutput([sprintf('AUDIT RECEIVED %s', $command->arguments()[0])]);
     }

@@ -41,6 +41,11 @@ final class CommandParser
             return ParseResult::error('Malformed command line');
         }
 
+        // Check if the command start with #
+        if(str_starts_with($command, '#')) {
+            return ParseResult::error('Malformed command line (invalid comment position)');
+        }
+
         if (!array_key_exists($command, self::COMMANDS)) {
             return ParseResult::error("Unknown command: {$command}");
         }

@@ -73,9 +73,10 @@ final class PaymentStateMachine
         }
 
         throw new PaymentDomainException(sprintf(
-            '%s not allowed from %s',
+            '%s not allowed: cannot process payment in "%s" state',
             $command,
-            $payment->state()        ));
+            $payment->state()
+        ));
     }
 
     private function selfReview(Payment $payment): bool
